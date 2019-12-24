@@ -3,14 +3,13 @@
 static const struct {
 	uint16_t devID;
 	uint16_t sramSize;
-	const char *family;	
 } chipTable[] = {
 //dev_ID  	RAM (Kbytes)	Family
-	0x444, 		4, 					"STM32F030x4/STM32F030x6/STM32F03x",
-	0x445, 		6, 					"STM32F070x6/STM32F04x",
-	0x440, 		8, 					"STM32F030x8/STM32F05x",
-	0x448, 		16, 				"STM32F070xB/STM32F07x",
-	0x442, 		32, 				"STM32F030xC/STM32F09x",
+	0x444, 		4, 					//"STM32F030x4/STM32F030x6/STM32F03x",
+	0x445, 		6, 					//"STM32F070x6/STM32F04x",
+	0x440, 		8, 					//"STM32F030x8/STM32F05x",
+	0x448, 		16, 				//"STM32F070xB/STM32F07x",
+	0x442, 		32, 				//"STM32F030xC/STM32F09x",
 };
 
 
@@ -48,14 +47,15 @@ bool RunApp(uint32_t appStartAddr) {
  *****************************************************************/
 bool MoveAppCode(uint32_t destAddr, uint32_t srcAddr, uint32_t pages) {
 uint32_t crcVal = 0;
+uint16_t pageSize = ReadChipInfo()->pageSize;
 bool updateSuccess = false;
 	
-	crcVal = Crc32Calc((uint8_t *)srcAddr, GetFlashPageSize() * pages);
+	crcVal = Crc32Calc((uint8_t *)srcAddr, pageSize * pages);
 	FlashUnlock();
 	FlashPageErase(destAddr, pages);
-	FlashProgram((uint16_t *)destAddr, (uint16_t *)srcAddr, GetFlashPageSize() * pages / sizeof(uint16_t));
+	FlashProgram((uint16_t *)destAddr, (uint16_t *)srcAddr, pageSize * pages / sizeof(uint16_t));
 	
-	if(Crc32Calc((uint8_t *)destAddr, GetFlashPageSize() * pages) == crcVal) {
+	if(Crc32Calc((uint8_t *)destAddr, pageSize * pages) == crcVal) {
 		FlashPageErase(srcAddr, pages);
 		updateSuccess = true;
 	}
@@ -66,7 +66,8 @@ bool updateSuccess = false;
 }
 
 const sChipInfo *ReadChipInfo(void) {
-const sChipInfo *info = (const sChipInfo *)CHIP_INFO_ADDR;
+uint16_t pageSize = GetFlashPageSize();
+const sChipInfo *info = (const sChipInfo *)(FLASH_BASE + pageSize - CHIP_INFO_MAX_SIZE);
 
 	//Chip information content at address CHIP_INFO_ADDR will be erased 
 	//when iboot code be programed. We will reprogram it.
@@ -76,35 +77,33 @@ const sChipInfo *info = (const sChipInfo *)CHIP_INFO_ADDR;
 		//CRC32 calculate convert 96bit UID to 32bit UID.
 		chipInfo.UID = Crc32Calc((const uint8_t *)UID_BASE, 12);
 		
-		//Read device ID
-		chipInfo.devID = DBGMCU->IDCODE & DBGMCU_IDCODE_DEV_ID_Msk;
-		//Read revision ID
-		chipInfo.devRev = (DBGMCU->IDCODE & DBGMCU_IDCODE_REV_ID_Msk)>>DBGMCU_IDCODE_REV_ID_Pos;
+		//Read device ID code.
+		chipInfo.idCode = DBGMCU->IDCODE;
 		//Calculate page size. 
 		//If flash size greater than 128KByte, page size shold be 2KByte.
-		chipInfo.pageSize = GetFlashPageSize();
+		chipInfo.pageSize = pageSize;
 		//Calculate total pages.
-		chipInfo.totalPages = (chipInfo.pageSize > 1024) ? \
+		chipInfo.totalPages = (pageSize > 1024) ? \
 													*(uint16_t *)FLASHSIZE_BASE / 2 : *(uint16_t *)FLASHSIZE_BASE;
 		
-		//Match chip family & ram size from chipTable.
+		//Find chip ram size from chipTable.
 		for(uint8_t i=0; i<sizeof(chipTable)/sizeof(chipTable[0]); i++) {
-			if(chipInfo.devID == chipTable[i].devID) {
+			if((chipInfo.idCode & DBGMCU_IDCODE_DEV_ID_Msk) == chipTable[i].devID) {
 				chipInfo.sramSize = chipTable[i].sramSize * 1024;
-				chipInfo.family = chipTable[i].family;
 				break;
 			}
 		}
 
 		//Calculate application run address.
-		chipInfo.appRunAddr = FLASH_BASE + IBOOT_APP_SIZE;
+		chipInfo.appRunAddr = FLASH_BASE + pageSize;
 		//Calculate application load address.
-		chipInfo.appLoadAddr = (chipInfo.pageSize * chipInfo.totalPages + IBOOT_APP_SIZE) / 2 + FLASH_BASE;
+		chipInfo.appLoadAddr = (pageSize * (chipInfo.totalPages + 1)) / 2 + FLASH_BASE;
 		
 		//
 		FlashUnlock();
-		FlashProgram((uint16_t *)CHIP_INFO_ADDR, (uint16_t *)&chipInfo, sizeof(chipInfo));
-		FlashLock();		
+		FlashProgram((uint16_t *)(FLASH_BASE + pageSize - CHIP_INFO_MAX_SIZE), \
+								 (uint16_t *)&chipInfo, sizeof(chipInfo));
+		FlashLock();
 	}
 	
 	return info;

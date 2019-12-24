@@ -16,8 +16,8 @@ const sChipInfo *info;
 		MoveAppCode(info->appRunAddr, info->appLoadAddr, (info->appLoadAddr - info->appRunAddr) / info->pageSize);
 	}
 	
-	//Run application which locate at FLASH_BASE + IBOOT_APP_SIZE.
-	RunApp(FLASH_BASE + IBOOT_APP_SIZE);
+	//Run application which locate at FLASH_BASE + pagesize.
+	RunApp(FLASH_BASE + info->pageSize);
 	
 	//Normally program will never run to here.
 	while(1);

@@ -8,22 +8,19 @@
 typedef		void (*pfunc)(void);
 
 typedef struct {
-	const char *family;
-	uint32_t appRunAddr;
-	uint32_t appLoadAddr;
 	uint32_t UID;
-	uint16_t devID;
-	uint16_t devRev;
+	uint32_t idCode;
 	uint16_t pageSize;
 	uint16_t totalPages;
 	uint16_t sramSize;
+	uint16_t reserved;
+	uint32_t appRunAddr;
+	uint32_t appLoadAddr;	
 } sChipInfo;
 
 
-#define		IBOOT_APP_SIZE				(2 * 1024)
 #define		VECTOR_TBL_SIZE				(48 * 4)
-#define		CHIP_INFO_ADDR				(FLASH_BASE + IBOOT_APP_SIZE - 64)
-
+#define		CHIP_INFO_MAX_SIZE		(32)
 
 //public functions prototype
 bool MoveAppCode(uint32_t destAddr, uint32_t srcAddr, uint32_t pages);
