@@ -1,21 +1,24 @@
 #include "iboot.h"
 
+/******************************************************************
+	Move application code from appLoadAddr to appRunAddr and run it.
+ *****************************************************************/
 int main(void) {
+const sChipInfo *info;
 	
-	//User data0 in option byte is used as application update flag.
-	//If it's not the default value, we update application and reset it.
-	if(OB->DATA0 != 0xFF) {
-		if(UpdateApp()) {
-			WriteOptionByte(&(OB->DATA0), 0xFF);
-		}
+	//Read chip informations.
+	info = ReadChipInfo();
+	
+	//We copy application code from appLoadAddr to appRunAddr,
+	//if appLoadAddr contents is a valid SP pointer.
+	if((*(__IO uint32_t *)(info->appLoadAddr) >= SRAM_BASE) && \
+		 (*(__IO uint32_t *)(info->appLoadAddr) < (SRAM_BASE + info->sramSize))){
+		MoveAppCode(info->appRunAddr, info->appLoadAddr, (info->appLoadAddr - info->appRunAddr) / info->pageSize);
 	}
 	
 	//Run application which locate at FLASH_BASE + IBOOT_APP_SIZE.
-	//Incase of failed, we generate a system reset to try to recover.
-	if(!RunApp(FLASH_BASE + IBOOT_APP_SIZE)) {
-		NVIC_SystemReset();
-	}
+	RunApp(FLASH_BASE + IBOOT_APP_SIZE);
 	
-	//Program will never run to here.
+	//Normally program will never run to here.
 	while(1);
 }

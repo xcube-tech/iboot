@@ -6,6 +6,7 @@
 #include <stdbool.h>
 
 typedef		void (*pfunc)(void);
+
 typedef struct {
 	const char *family;
 	uint32_t appRunAddr;
@@ -18,22 +19,24 @@ typedef struct {
 	uint16_t sramSize;
 } sChipInfo;
 
+
 #define		IBOOT_APP_SIZE				(2 * 1024)
 #define		VECTOR_TBL_SIZE				(48 * 4)
 #define		CHIP_INFO_ADDR				(FLASH_BASE + IBOOT_APP_SIZE - 64)
 
 
 //public functions prototype
-bool UpdateApp(void);
+bool MoveAppCode(uint32_t destAddr, uint32_t srcAddr, uint32_t pages);
 bool RunApp(uint32_t appStartAddr);
-bool WriteOptionByte(__IO uint16_t *addr, uint8_t val);
+const sChipInfo *ReadChipInfo(void);
 
 //private functions prototype
+static uint16_t GetFlashPageSize(void);
 static void FlashUnlock(void);
 static void FlashLock(void);
 static bool FlashPageErase(uint32_t addr, uint8_t pageCnt);
 static uint32_t FlashProgram(uint16_t *dest, uint16_t *src, uint16_t len);
 static uint32_t Crc32Calc(const uint8_t *buff, uint32_t len);
-static const sChipInfo *ReadChipInfo(void);
+
 
 #endif //__IBOOT_H__
