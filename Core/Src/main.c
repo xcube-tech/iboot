@@ -1,23 +1,23 @@
 #include "iboot.h"
 
-/******************************************************************
-	Move application code from appLoadAddr to appRunAddr and run it.
- *****************************************************************/
 int main(void) {
-const sChipInfo *info;
+sChipInfo info = {0};
 	
-	//Read chip informations.
-	info = ReadChipInfo();
+	//Read flash size, page size, ram size, app load n run address.
+	ReadChipInfo(&info);
 	
 	//We copy application code from appLoadAddr to appRunAddr,
-	//if appLoadAddr contents is a valid SP pointer.
-	if((*(__IO uint32_t *)(info->appLoadAddr) >= SRAM_BASE) && \
-		 (*(__IO uint32_t *)(info->appLoadAddr) < (SRAM_BASE + info->sramSize))){
-		MoveAppCode(info->appRunAddr, info->appLoadAddr, (info->appLoadAddr - info->appRunAddr) / info->pageSize);
+	//if LSB of user data option byte is not true.
+	if(!(OB->DATA0 & 0x01)) {
+		if(IsValueInRange(*(uint32_t *)(info.appLoadAddr), SRAM_BASE, SRAM_BASE + info.sramSize)){
+			CopyAppCode(info.appRunAddr, info.appLoadAddr, info.totalPages / 2 - 1);
+		}
+		//Set LSB of user data option byte.
+		WriteOptByte(&(OB->DATA0), OB->DATA0 | 0x01);
 	}
 	
 	//Run application which locate at FLASH_BASE + pagesize.
-	RunApp(FLASH_BASE + info->pageSize);
+	RunApp(FLASH_BASE + info.pageSize);
 	
 	//Normally program will never run to here.
 	while(1);

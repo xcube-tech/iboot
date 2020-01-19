@@ -8,31 +8,29 @@
 typedef		void (*pfunc)(void);
 
 typedef struct {
-	uint32_t UID;
-	uint32_t idCode;
+	uint32_t appRunAddr;
+	uint32_t appLoadAddr;	
 	uint16_t pageSize;
 	uint16_t totalPages;
 	uint16_t sramSize;
-	uint16_t reserved;
-	uint32_t appRunAddr;
-	uint32_t appLoadAddr;	
 } sChipInfo;
 
 
-#define		VECTOR_TBL_SIZE				(48 * 4)
-#define		CHIP_INFO_MAX_SIZE		(32)
+#define		VECTOR_TBL_ITEMS			(48)
 
 //public functions prototype
-bool MoveAppCode(uint32_t destAddr, uint32_t srcAddr, uint32_t pages);
+bool CopyAppCode(uint32_t destAddr, uint32_t srcAddr, uint32_t pages);
 bool RunApp(uint32_t appStartAddr);
-const sChipInfo *ReadChipInfo(void);
+bool WriteOptByte(volatile uint16_t *addr, uint16_t val);
+void ReadChipInfo(sChipInfo *info);
+bool IsValueInRange(uint32_t val, uint32_t low, uint32_t high);
 
 //private functions prototype
 static uint16_t GetFlashPageSize(void);
 static void FlashUnlock(void);
 static void FlashLock(void);
-static bool FlashPageErase(uint32_t addr, uint8_t pageCnt);
-static uint32_t FlashProgram(uint16_t *dest, uint16_t *src, uint16_t len);
+static bool FlashPageErase(uint32_t addr, uint32_t pageCnt);
+static uint32_t FlashProgram(uint16_t *dest, uint16_t *src, uint32_t len);
 static uint32_t Crc32Calc(const uint8_t *buff, uint32_t len);
 
 

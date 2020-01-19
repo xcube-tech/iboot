@@ -106,28 +106,28 @@ Reset_Handler    PROC
 
 NMI_Handler     PROC
                 EXPORT  NMI_Handler                    [WEAK]
-                B       .
+                B       Reset_Handler
                 ENDP
 HardFault_Handler\
                 PROC
                 EXPORT  HardFault_Handler              [WEAK]
-                B       .
+                B       Reset_Handler
                 ENDP
 SVC_Handler     PROC
                 EXPORT  SVC_Handler                    [WEAK]
-                B       .
+                B       Reset_Handler
                 ENDP
 PendSV_Handler  PROC
                 EXPORT  PendSV_Handler                 [WEAK]
-                B       .
+                B       Reset_Handler
                 ENDP
 SysTick_Handler PROC
                 EXPORT  SysTick_Handler                [WEAK]
-                B       .
+                B       Reset_Handler
                 ENDP
 
 Default_Handler PROC
-                B       .
+                B       Reset_Handler
 
                 ENDP
 
@@ -144,7 +144,6 @@ Default_Handler PROC
 
                  ELSE
 
-                 IMPORT  __use_two_region_memory
                  EXPORT  __user_initial_stackheap
 
 __user_initial_stackheap
