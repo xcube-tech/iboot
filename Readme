@@ -7,7 +7,7 @@ Page (n+2)/2 ~ Page n用于暂存待升级的程序代码，应用程序将待�
 然后将option byte中user data0 的最低位置0，并触发一次系统复位。
 系统复位后bootloader接管系统运行，检测到user data0的最低为为0后，
 从对应的FLASH地址中取出SP的值并检测其是否在芯片有效的RAM地址范围内，
-如果SP的值有效，则将Page (n+2)/2 ~ Page n的程序代码拷贝至Page 1 ~ Page n/2处。
+如果SP的值有效，则P将age (n+2)/2 ~ Page n的程序代码拷贝至Page 1 ~ Page n/2处。
 接下来bootloader将程序的中断向量表拷贝至RAM中，并重映射RAM地址到0，然后
 跳转运行应用程序。
 

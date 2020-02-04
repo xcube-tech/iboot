@@ -1,5 +1,19 @@
 #include "iboot.h"
 
+//Export some functions at EXPORT_FUNC_ADDR.
+const static struct {
+	bool (*CopyAppCode)(uint32_t destAddr, uint32_t srcAddr, uint32_t pages);
+	bool (*WriteOptByte)(volatile uint16_t *addr, uint16_t val);
+	void (*ReadChipInfo)(sChipInfo *info);
+	uint32_t (*Crc32Calc)(const uint8_t *buff, uint32_t len);
+} bootCode __attribute__((at(EXPORT_FUNC_ADDR))) = {
+	CopyAppCode,
+	WriteOptByte,
+	ReadChipInfo,
+	Crc32Calc,
+};
+
+//Device ID vs RAM size match table.
 const static struct {
 	uint16_t devID;
 	uint8_t sramSize;
@@ -13,19 +27,17 @@ const static struct {
 };
 
 /****************************************************************
-	If the content in appStartAddr is a valid SP pointer,
+	If the content in info.appRunAddr is a valid SP pointer,
 	We copy vector table from appStartAddr to RAM, 
 	reallocate RAM to address 0, and then run application. 
  ***************************************************************/
-bool RunApp(uint32_t appStartAddr) {
-sChipInfo info = {0};
-
-	ReadChipInfo(&info);
+bool RunApp(sChipInfo *chipInfo) {
 	
 	//check SP point to SRAM address range.
-	if(IsValueInRange(*(uint32_t *)appStartAddr, SRAM_BASE, SRAM_BASE + info.sramSize)){
+	if((*(uint32_t *)(chipInfo->appRunAddr) >= SRAM_BASE) && \
+		 (*(uint32_t *)(chipInfo->appRunAddr) < SRAM_BASE + chipInfo->sramSize)) {
 		//copy vectors table to SRAM.
-	__IO uint32_t *src = (uint32_t *)appStartAddr;
+	__IO uint32_t *src = (uint32_t *)(chipInfo->appRunAddr);
 	__IO uint32_t *dest = (uint32_t *)SRAM_BASE;
 		for(uint8_t i=0; i<VECTOR_TBL_ITEMS; i++) {
 			*dest++ = *src++;
@@ -35,37 +47,33 @@ sChipInfo info = {0};
 		SYSCFG->CFGR1 |= SYSCFG_CFGR1_MEM_MODE;
 		
 		//update SP & PC value.
-		__set_MSP(*(__IO uint32_t *)appStartAddr);
-		((pfunc)(*((__IO uint32_t *)appStartAddr+1)))();
+		__set_MSP(*(__IO uint32_t *)(chipInfo->appRunAddr));
+		((pfunc)(*((__IO uint32_t *)(chipInfo->appRunAddr)+1)))();
 	}
 	
 	return false;
 }
 
 /******************************************************************
-	Copy application code from srcAddr to destAddr.
+	Copy n pages data from srcAddr to destAddr.
  *****************************************************************/
 bool CopyAppCode(uint32_t destAddr, uint32_t srcAddr, uint32_t pages) {
-uint32_t crcVal = 0;
-uint16_t pageSize = GetFlashPageSize();
-bool updateSuccess = false;
+bool eraseState = false;
 	
-	crcVal = Crc32Calc((uint8_t *)srcAddr, pageSize * pages);
-	FlashUnlock();
-	FlashPageErase(destAddr, pages);
-	FlashProgram((uint16_t *)destAddr, (uint16_t *)srcAddr, pageSize * pages / sizeof(uint16_t));
-	
-	if(Crc32Calc((uint8_t *)destAddr, pageSize * pages) == crcVal) {
-		updateSuccess = true;
+	if(FlashUnlock()) {
+		FlashPageErase(destAddr, pages);
+		eraseState = FlashProgram((uint16_t *)destAddr, (uint16_t *)srcAddr, \
+															 GetFlashPageSize() * pages / sizeof(uint16_t));
+		FlashLock();
 	}
-                       
-	FlashLock();
 				
-	return updateSuccess;
+	return eraseState;
 }
 
-
-bool WriteOptByte(volatile uint16_t *addr, uint16_t val) {
+/******************************************************************
+	Write option byte which locate at addr to val.
+ *****************************************************************/
+bool WriteOptByte(__IO uint16_t *addr, uint16_t val) {
 OB_TypeDef optByte = {0};
 
 	if(((uint32_t)addr < OB_BASE) || ((uint32_t)addr >= (OB_BASE + sizeof(optByte)))) {
@@ -78,77 +86,94 @@ OB_TypeDef optByte = {0};
 	}
 	
 	//Modify option byte
-	((uint16_t *)(&optByte))[((uint32_t)addr - OB_BASE) / 2] = val;
+	((uint16_t *)(&optByte))[((uint32_t)addr - OB_BASE) / (sizeof(uint16_t))] = val;
 	
-	FlashUnlock();
-
-	//Erase option bytes.
-	FLASH->CR |= FLASH_CR_OPTER;
-	FLASH->CR |=  FLASH_CR_STRT;
-	while ((FLASH->SR & FLASH_SR_BSY) != 0);
-	if ((FLASH->SR & FLASH_SR_EOP) != 0) {
-		FLASH->SR = FLASH_SR_EOP;
-	}	else {
-		return false;
-	}
-	FLASH->CR &= ~FLASH_CR_OPTER;
-	
-	//Write option byte
-	FLASH->CR |= FLASH_CR_OPTPG;
-	
-	for(uint8_t i=0; i<sizeof(optByte)/sizeof(uint16_t); i++) {
-		((uint16_t *)(OB_BASE))[i] = ((uint16_t *)(&optByte))[i];
+	if(FlashUnlock()) {
+		//Erase option bytes.
+		FLASH->CR |= FLASH_CR_OPTER;
+		FLASH->CR |=  FLASH_CR_STRT;
 		while ((FLASH->SR & FLASH_SR_BSY) != 0);
-		if ((FLASH->SR & FLASH_SR_EOP) != 0) {
-			FLASH->SR = FLASH_SR_EOP;
-		}	else {
+		if ((FLASH->SR & FLASH_SR_EOP) == 0) {
 			return false;
-		}	
+		}
+		FLASH->SR = FLASH_SR_EOP;
+		FLASH->CR &= ~FLASH_CR_OPTER;
+		
+		//Write option byte
+		FLASH->CR |= FLASH_CR_OPTPG;
+		
+		for(uint8_t i=0; i<sizeof(optByte)/sizeof(uint16_t); i++) {
+			((uint16_t *)(OB_BASE))[i] = ((uint16_t *)(&optByte))[i];
+			while ((FLASH->SR & FLASH_SR_BSY) != 0);
+			if ((FLASH->SR & FLASH_SR_EOP) == 0) {
+				return false;
+			}
+			FLASH->SR = FLASH_SR_EOP;
+		}
+		FLASH->CR &= ~FLASH_CR_OPTPG;
+		
+		FlashLock();	
+		
+		return true;
 	}
-	FLASH->CR &= ~FLASH_CR_OPTPG;
-	
-	FlashLock();
-	
-	FLASH->CR |= FLASH_CR_OBL_LAUNCH;
-	
-	//while ((FLASH->SR & FLASH_SR_BSY) != 0);
-	
-	return true;
+
+	return false;
 }
 
-void ReadChipInfo(sChipInfo *info) {
-
+/******************************************************************
+	Read flash size, page size, ram size, app load n run address.
+ *****************************************************************/
+void ReadChipInfo(sChipInfo *chipInfo) {
 	//Calculate page size. 
 	//If flash size greater than 128KByte, page size shold be 2KByte.
-	info->pageSize = GetFlashPageSize();
+	chipInfo->pageSize = GetFlashPageSize();
 
 	//Calculate total pages.
-	info->totalPages = (info->pageSize & 0x800) ? \
+	chipInfo->totalPages = (chipInfo->pageSize & 0x800) ? \
 												*(uint16_t *)FLASHSIZE_BASE / 2 : *(uint16_t *)FLASHSIZE_BASE;
 	
 	//Find chip ram size from chipTable.
 	for(uint8_t i=0; i<sizeof(chipTable)/sizeof(chipTable[0]); i++) {
 		if((DBGMCU->IDCODE & DBGMCU_IDCODE_DEV_ID_Msk) == chipTable[i].devID) {
-			info->sramSize = chipTable[i].sramSize * 1024;
+			chipInfo->sramSize = chipTable[i].sramSize * 1024;
 			break;
 		}
 	}
 
 	//Calculate application run address.
-	info->appRunAddr = FLASH_BASE + info->pageSize;
+	chipInfo->appRunAddr = FLASH_BASE + chipInfo->pageSize;
 	//Calculate application load address.
-	info->appLoadAddr = FLASH_BASE + info->pageSize * (info->totalPages / 2 + 1);
+	chipInfo->appLoadAddr = FLASH_BASE + chipInfo->pageSize * (chipInfo->totalPages / 2 + 1);
 }
 
-bool IsValueInRange(uint32_t val, uint32_t low, uint32_t high) {
-	return ((val >= low) && (val < high));
+/******************************************************************
+	Calculate CRC value of len bytes of buff with standerd CRC-32.
+ *****************************************************************/
+uint32_t Crc32Calc(const uint8_t *buff, uint32_t len) {
+uint32_t val = 0;
+	
+	RCC->AHBENR |= RCC_AHBENR_CRCEN;
+	//CRC->INIT = 0xFFFFFFFF;
+	CRC->CR = CRC_CR_REV_OUT | CRC_CR_REV_IN_0 | CRC_CR_RESET;
+	while(CRC->CR & CRC_CR_RESET);
+	
+	while(len--) {
+		*(uint8_t *)(&CRC->DR) = *buff++;
+	}
+	
+	val = (CRC->DR ^ 0xFFFFFFFF);
+	RCC->AHBENR &= ~RCC_AHBENR_CRCEN;	
+	
+	return val;
 }
+
+
 
 static uint16_t GetFlashPageSize(void) {
 	return (*(uint16_t *)FLASHSIZE_BASE < 128) ? 1024 : 2048;
 }
 
-static void FlashUnlock(void) {
+static bool FlashUnlock(void) {
 	if((FLASH->CR & FLASH_CR_LOCK) != 0 ) {
 		FLASH->KEYR = FLASH_KEY1;
 		FLASH->KEYR = FLASH_KEY2;
@@ -157,11 +182,15 @@ static void FlashUnlock(void) {
 		FLASH->OPTKEYR = FLASH_OPTKEY1;
 		FLASH->OPTKEYR = FLASH_OPTKEY2;
 	}
+	
+	return (FLASH->CR & FLASH_CR_OPTWRE);
 }
 
-static void FlashLock(void) {
-	FLASH->CR |= FLASH_CR_LOCK;
+static bool FlashLock(void) {
 	FLASH->CR &= ~FLASH_CR_OPTWRE;
+	FLASH->CR |= FLASH_CR_LOCK;	
+	
+	return (FLASH->CR & FLASH_CR_LOCK);
 }
 
 static bool FlashPageErase(uint32_t addr, uint32_t pageCnt) {
@@ -171,11 +200,10 @@ static bool FlashPageErase(uint32_t addr, uint32_t pageCnt) {
 		FLASH->AR = addr + GetFlashPageSize() * i;
 		FLASH->CR |= FLASH_CR_STRT;
 		while ((FLASH->SR & FLASH_SR_BSY) != 0);
-		if ((FLASH->SR & FLASH_SR_EOP) != 0) {
-			FLASH->SR = FLASH_SR_EOP;
-		}	else {
+		if ((FLASH->SR & FLASH_SR_EOP) == 0) {
 			return false;
 		}
+		FLASH->SR = FLASH_SR_EOP;
 	}
 	FLASH->CR &= ~FLASH_CR_PER;
 	return true;
@@ -183,11 +211,10 @@ static bool FlashPageErase(uint32_t addr, uint32_t pageCnt) {
 
 static uint32_t FlashProgram(uint16_t *dest, uint16_t *src, uint32_t len) {
 	
-	//write device information to constChipInfo location.
 	FLASH->CR |= FLASH_CR_PG;
-	for(uint32_t i=0; i<len / 2; i++) {
+	for(uint32_t i=0; i<len / sizeof(uint16_t); i++) {
 		dest[i] = src[i];
-		while ((FLASH->SR & FLASH_SR_BSY) != 0 );	
+		while ((FLASH->SR & FLASH_SR_BSY));	
 		if (FLASH->SR & FLASH_SR_EOP) {
 			FLASH->SR = FLASH_SR_EOP;
 		} else {
@@ -199,22 +226,3 @@ static uint32_t FlashProgram(uint16_t *dest, uint16_t *src, uint32_t len) {
 	
 	return len;
 }
-
-static uint32_t Crc32Calc(const uint8_t *buff, uint32_t len) {
-uint32_t val = 0;
-	
-	RCC->AHBENR |= RCC_AHBENR_CRCEN;
-	CRC->INIT = 0xFFFFFFFF;
-	CRC->CR = CRC_CR_REV_OUT | CRC_CR_REV_IN_0 | CRC_CR_RESET;
-	while(CRC->CR & CRC_CR_RESET);
-	
-	while(len--) {
-		CRC->DR = *buff++;
-	}
-	
-	val = CRC->DR;
-	RCC->AHBENR &= ~RCC_AHBENR_CRCEN;	
-	
-	return val;
-}
-
