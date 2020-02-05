@@ -32,6 +32,6 @@ static uint16_t GetFlashPageSize(void);
 static bool FlashUnlock(void);
 static bool FlashLock(void);
 static bool FlashPageErase(uint32_t addr, uint32_t pageCnt);
-static uint32_t FlashProgram(uint16_t *dest, uint16_t *src, uint32_t len);
+static bool FlashProgram(uint16_t *dest, uint16_t *src, uint32_t len);
 
 #endif //__IBOOT_H__

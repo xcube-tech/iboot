@@ -3,7 +3,7 @@
 //Export some functions at EXPORT_FUNC_ADDR.
 const static struct {
 	bool (*CopyAppCode)(uint32_t destAddr, uint32_t srcAddr, uint32_t pages);
-	bool (*WriteOptByte)(volatile uint16_t *addr, uint16_t val);
+	bool (*WriteOptByte)(__IO uint16_t *addr, uint16_t val);
 	void (*ReadChipInfo)(sChipInfo *info);
 	uint32_t (*Crc32Calc)(const uint8_t *buff, uint32_t len);
 } bootCode __attribute__((at(EXPORT_FUNC_ADDR))) = {
@@ -209,7 +209,8 @@ static bool FlashPageErase(uint32_t addr, uint32_t pageCnt) {
 	return true;
 }
 
-static uint32_t FlashProgram(uint16_t *dest, uint16_t *src, uint32_t len) {
+static bool FlashProgram(uint16_t *dest, uint16_t *src, uint32_t len) {
+bool writeState = true;
 	
 	FLASH->CR |= FLASH_CR_PG;
 	for(uint32_t i=0; i<len / sizeof(uint16_t); i++) {
@@ -218,11 +219,11 @@ static uint32_t FlashProgram(uint16_t *dest, uint16_t *src, uint32_t len) {
 		if (FLASH->SR & FLASH_SR_EOP) {
 			FLASH->SR = FLASH_SR_EOP;
 		} else {
-			len = i * 2;
+			writeState = false;
 			break;
 		}
 	}
 	FLASH->CR &= ~FLASH_CR_PG;
 	
-	return len;
+	return writeState;
 }
