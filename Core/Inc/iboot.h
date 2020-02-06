@@ -13,17 +13,24 @@ typedef struct {
 	uint16_t pageSize;
 	uint16_t totalPages;
 	uint16_t sramSize;
-} sChipInfo;
+} chipInfo_T;
+
+typedef struct {
+	bool (*CopyAppCode)(uint32_t destAddr, uint32_t srcAddr, uint32_t pages);
+	bool (*WriteOptByte)(__IO uint16_t *addr, uint16_t val);
+	void (*ReadChipInfo)(chipInfo_T *info);
+	uint32_t (*Crc32Calc)(const uint8_t *buff, uint32_t len);
+} bootCode_T;
 
 
 #define		VECTOR_TBL_ITEMS			(48)
 #define		EXPORT_FUNC_ADDR			(0x080003F0)
 
 //public functions prototype
-bool RunApp(sChipInfo *chipInfo);
+bool RunApp(chipInfo_T *chipInfo);
 bool CopyAppCode(uint32_t destAddr, uint32_t srcAddr, uint32_t pages);
 bool WriteOptByte(__IO uint16_t *addr, uint16_t val);
-void ReadChipInfo(sChipInfo *chipInfo);
+void ReadChipInfo(chipInfo_T *chipInfo);
 uint32_t Crc32Calc(const uint8_t *buff, uint32_t len);
 
 

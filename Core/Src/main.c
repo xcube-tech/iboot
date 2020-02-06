@@ -1,7 +1,7 @@
 #include "iboot.h"
 
 int main(void) {
-sChipInfo chipInfo = {0};
+chipInfo_T chipInfo = {0};
 uint16_t appPages = 0;
 	
 	//Read flash size, page size, ram size, app load n run address.

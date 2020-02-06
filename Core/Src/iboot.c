@@ -1,12 +1,7 @@
 #include "iboot.h"
 
 //Export some functions at EXPORT_FUNC_ADDR.
-const static struct {
-	bool (*CopyAppCode)(uint32_t destAddr, uint32_t srcAddr, uint32_t pages);
-	bool (*WriteOptByte)(__IO uint16_t *addr, uint16_t val);
-	void (*ReadChipInfo)(sChipInfo *info);
-	uint32_t (*Crc32Calc)(const uint8_t *buff, uint32_t len);
-} bootCode __attribute__((at(EXPORT_FUNC_ADDR))) = {
+const static bootCode_T bootCode __attribute__((at(EXPORT_FUNC_ADDR))) = {
 	CopyAppCode,
 	WriteOptByte,
 	ReadChipInfo,
@@ -31,7 +26,7 @@ const static struct {
 	We copy vector table from appStartAddr to RAM, 
 	reallocate RAM to address 0, and then run application. 
  ***************************************************************/
-bool RunApp(sChipInfo *chipInfo) {
+bool RunApp(chipInfo_T *chipInfo) {
 	
 	//check SP point to SRAM address range.
 	if((*(uint32_t *)(chipInfo->appRunAddr) >= SRAM_BASE) && \
@@ -62,8 +57,7 @@ bool eraseState = false;
 	
 	if(FlashUnlock()) {
 		FlashPageErase(destAddr, pages);
-		eraseState = FlashProgram((uint16_t *)destAddr, (uint16_t *)srcAddr, \
-															 GetFlashPageSize() * pages / sizeof(uint16_t));
+		eraseState = FlashProgram((uint16_t *)destAddr, (uint16_t *)srcAddr, GetFlashPageSize() * pages);
 		FlashLock();
 	}
 				
@@ -123,7 +117,7 @@ OB_TypeDef optByte = {0};
 /******************************************************************
 	Read flash size, page size, ram size, app load n run address.
  *****************************************************************/
-void ReadChipInfo(sChipInfo *chipInfo) {
+void ReadChipInfo(chipInfo_T *chipInfo) {
 	//Calculate page size. 
 	//If flash size greater than 128KByte, page size shold be 2KByte.
 	chipInfo->pageSize = GetFlashPageSize();
