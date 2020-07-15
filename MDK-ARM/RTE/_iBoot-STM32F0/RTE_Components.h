@@ -4,7 +4,7 @@
  *      *** Do not modify ! ***
  *
  * Project: 'iboot' 
- * Target:  'iBoot' 
+ * Target:  'iBoot-STM32F0' 
  */
 
 #ifndef RTE_COMPONENTS_H

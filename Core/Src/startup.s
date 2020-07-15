@@ -104,30 +104,23 @@ Reset_Handler    PROC
 
 ; Dummy Exception Handlers (infinite loops which can be modified)
 
-NMI_Handler     PROC
-                EXPORT  NMI_Handler                    [WEAK]
-                B       Reset_Handler
-                ENDP
-HardFault_Handler\
-                PROC
-                EXPORT  HardFault_Handler              [WEAK]
-                B       Reset_Handler
-                ENDP
-SVC_Handler     PROC
-                EXPORT  SVC_Handler                    [WEAK]
-                B       Reset_Handler
-                ENDP
-PendSV_Handler  PROC
-                EXPORT  PendSV_Handler                 [WEAK]
-                B       Reset_Handler
-                ENDP
-SysTick_Handler PROC
-                EXPORT  SysTick_Handler                [WEAK]
-                B       Reset_Handler
-                ENDP
+SystemReset		PROC
+				EXPORT	NVIC_SystemReset			   [WEAK]
+				EXPORT	NMI_Handler					   [WEAK]
+				EXPORT	HardFault_Handler			   [WEAK]
+				EXPORT	SVC_Handler					   [WEAK]
+				EXPORT	PendSV_Handler				   [WEAK]
+				EXPORT	SysTick_Handler				   [WEAK]
+				EXPORT	Default_Handler				   [WEAK]
 
-Default_Handler PROC
-                B       Reset_Handler
+NVIC_SystemReset
+NMI_Handler
+HardFault_Handler
+SVC_Handler
+PendSV_Handler
+SysTick_Handler
+Default_Handler
+                B       .
 
                 ENDP
 

@@ -2,14 +2,14 @@
 
 bootloader位于FLASH的第一页(Page 0)，用于完成代码的拷贝和RAM的重映射。
 
-程序正常运行代码位于Page 1 ~ Page n/2处，Page (n+1)/2用于程序储存运行参数，bootloader不会修改此page。
-Page (n+2)/2 ~ Page n用于暂存待升级的程序代码，应用程序将待升级的程序暂存此处，
-然后将option byte中user data0 的最低位置0，并触发一次系统复位。
-系统复位后bootloader接管系统运行，检测到user data0的最低为为0后，
+程序正常运行代码位于Page 1 ~ Page n/2处，Page n/2 ~ Page n-1用于暂存待升级的程序代码，
+应用程序将待升级的程序暂存此处，然后将option byte中user data0 的bit0置0，并触发一次系统复位。
+系统复位后bootloader接管系统运行，检测到user data0的bit0为0后，
 从对应的FLASH地址中取出SP的值并检测其是否在芯片有效的RAM地址范围内，
-如果SP的值有效，则P将age (n+2)/2 ~ Page n的程序代码拷贝至Page 1 ~ Page n/2处。
+如果SP的值有效，则P将age n/2 ~ Page n-1的程序代码拷贝至Page 1 ~ Page n/2处。
 接下来bootloader将程序的中断向量表拷贝至RAM中，并重映射RAM地址到0，然后
 跳转运行应用程序。
+Page n可用于程序储存运行参数，bootloader不会修改此page。
 
 程序的中断向量表将被映射到RAM的前48个word中,编译时应确保RAM的前48个word不会被覆盖。
 FLASH小于128K时，1Page = 1Kbyte，否则1Page = 2Kbyte。
