@@ -3,7 +3,8 @@
 
 #include <stdint.h>
 #include <stdbool.h>
-#include "stm32f0xx.h"
+#include "RTE_Components.h"
+#include CMSIS_device_header
 
 typedef		void (*pfunc)(void);
 
